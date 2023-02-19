@@ -1,76 +1,83 @@
 # Periodic tasks post-Loom
 
-old
+old: minimize blocking - use ScheduledExecutorService
 
-```java
+``` java
 var scheduler = Executors.newScheduledThreadPool(1);
 var future = scheduler.scheduleAtFixedRate(() -> {
     System.out.println("Hello, World!");
 }, 1, 2, TimeUnit.SECONDS);
 ```
 
-new
+new: embrace blocking - use Thread.sleep()
 
-```java
-var scope = new StructuredTaskScope<>();
-var future = scope.fork(() -> {
-    for (var deadline = Instant.now().plusSeconds(1);;
-             deadline = deadline.plusSeconds(2)
-    ) {
-        Thread.sleep(Duration.between(Instant.now(), deadline));
-        System.out.println("Hello, World!");
-    }
-    return null; // Unreachable
-});
+``` java
+try (var scope = new StructuredTaskScope<>()) {
+    var future = scope.fork(() -> {
+        for (var deadline = Instant.now().plusSeconds(1);;
+                 deadline = deadline.plusSeconds(2)
+        ) {
+            Thread.sleep(Duration.between(Instant.now(), deadline));
+            System.out.println("Hello, World!");
+        }
+        return null; // Unreachable
+    });
+}
 ```
 
-But... that's so loooong...
+Now use abstraction:
 
-Abstraction to the rescue!
-
-```java
+``` java
 public static Callable<?> repeatAtFixedRate(
     Runnable command,
     Duration initialDelay,
     Duration period
 ) {
-    for (var deadline = Instant.now().plus(initialDelay);;
-             deadline = deadline.plus(period)
-    ) {
-        Thread.sleep(Duration.between(Instant.now(), deadline));
-        command.run();
-    }
-    return null; // Unreachable
+    return () -> {
+        for (var deadline = Instant.now().plus(initialDelay);;
+                 deadline = deadline.plus(period)
+        ) {
+            Thread.sleep(Duration.between(Instant.now(), deadline));
+            command.run();
+        }
+        return null; // Unreachable
+    };
 }
 
 ...
 
-var scope = new StructuredTaskScope<>();
-var future = scope.fork(repeatAtFixedRate(() -> {
-    System.out.println("Hello, World!");
-}, Duration.ofSeconds(1), Duration.ofSeconds(2)));
+// Usage:
+try (var scope = new StructuredTaskScope<>()) {
+    var future = scope.fork(repeatAtFixedRate(() -> {
+        System.out.println("Hello, World!");
+    }, Duration.ofSeconds(1), Duration.ofSeconds(2)));
+}
 ```
 
-Of course the same goes for scheduleWithFixedDelay
+Same goes for scheduleWithFixedDelay:
 
-```java
+``` java
 public static Callable<?> repeatWithFixedDelay(
     Runnable command,
     Duration initialDelay,
     Duration delay
 ) {
-    Thread.sleep(initialDelay);
-    for (;;) {
-        command.run();
-        Thread.sleep(delay);
-    }
-    return null; // Unreachable
+    return () -> {
+        Thread.sleep(initialDelay);
+        for (;;) {
+            command.run();
+            Thread.sleep(delay);
+        }
+        return null; // Unreachable
+    };
 }
 
 ...
 
-var scope = new StructuredTaskScope<>();
-var future = scope.fork(repeatWithFixedDelay(() -> {
-    System.out.println("Hello, World!");
-}, Duration.ofSeconds(1), Duration.ofSeconds(2)));
+// Usage:
+try (var scope = new StructuredTaskScope<>()) {
+    var future = scope.fork(repeatWithFixedDelay(() -> {
+        System.out.println("Hello, World!");
+    }, Duration.ofSeconds(1), Duration.ofSeconds(2)));
+}
 ```

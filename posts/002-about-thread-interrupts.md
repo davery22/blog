@@ -13,7 +13,8 @@
 - A Thread `t1` can be interrupted by calling `t1.interrupt()`
 - This basically just sets a flag on the Thread's state, then "informs VM of interrupt"
 - If the Thread is blocked on IO (implying `interrupt()` was called by a different thread), the VM will wake up `t1`
-- All lowest-level blocking methods in the JDK are written to check the thread interrupt status upon waking up
+- Low-level blocking methods in the JDK that are responsive to interrupts are written to check the thread interrupt
+  status upon waking up
 - If the interrupt status is set, they will clear it (more on this later), then throw `InterruptedException`
   - This "read and clear" is actually one method: [Thread.interrupted()](https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Thread.html#interrupted())
 
